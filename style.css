@@ -1,0 +1,38 @@
+body, html {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Montserrat', sans-serif;
+}
+
+
+.bg {
+  background-image: url("header.jpg"); 
+  background-position: center;
+  background-size: cover;
+  height: 100%;
+}
+
+
+.caption {
+	position: absolute;
+	top: 30%;
+	width: 100%;
+	text-align: center;
+	color: white;
+  font-size: 25px;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+}
+
+.signup {
+	position: absolute;
+	top: 65%;
+	width: 100%;
+	text-align: center;
+  font-size: 25px;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+}
