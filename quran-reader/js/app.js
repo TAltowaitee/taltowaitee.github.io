@@ -9,7 +9,7 @@
 import * as pdfjsLib from '../vendor/pdf.mjs';
 import { findCitations, itemsToLines } from './detect.js';
 import { SURAHS, surahName, ayahCount } from './surahs.js';
-import { VersePlayer, RECITERS, ayahText } from './player.js';
+import { VersePlayer, RECITERS, REPEAT_MODES, ayahText } from './player.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdf.worker.mjs', import.meta.url).href;
 
@@ -93,6 +93,7 @@ async function goTo(n) {
   $('pageInput').value = n;
   $('prevPage').disabled = n <= 1;
   $('nextPage').disabled = n >= state.doc.numPages;
+  document.querySelector('.viewer').scrollTop = 0; // new page starts at the top
   $('focusPage').textContent = `صفحة ${ar(n)} من ${ar(state.doc.numPages)}`;
   save();
   renderVerseList(); // instant if cached; otherwise detection fills it in shortly
@@ -108,8 +109,11 @@ async function renderPage(n) {
   const base = page.getViewport({ scale: 1 });
   let cssWidth;
   if (state.focus) {
-    // Fit the whole page on screen: limited by width or by height, whichever is tighter
-    cssWidth = Math.min(innerWidth, innerHeight * (base.width / base.height));
+    const viewer = document.querySelector('.viewer');
+    const W = viewer.clientWidth, H = viewer.clientHeight;
+    // Landscape: fill the width and scroll down (a whole page would be too small to read).
+    // Portrait: show the whole page.
+    cssWidth = W > H ? Math.min(W, 1200) : Math.min(W, H * (base.width / base.height));
     canvas.style.width = `${cssWidth}px`;
   } else {
     canvas.style.width = '';
@@ -287,6 +291,11 @@ player.addEventListener('change', async ({ detail: d }) => {
   const title = `سورة ${surahName(d.surah)} · الآية ${ar(d.current)}` +
     (d.to > d.from ? ` (من ${ar(d.from)} إلى ${ar(d.to)})` : '');
   $('nowTitle').textContent = title;
+  const REPEAT_LABELS = { off: 'التكرار: متوقف', range: 'تكرار المقطع كاملًا', ayah: 'تكرار الآية الحالية' };
+  $('repeatBtn').classList.toggle('on', d.repeat !== 'off');
+  $('repeatBtn').querySelector('.rep-badge').hidden = d.repeat !== 'ayah';
+  $('repeatBtn').title = REPEAT_LABELS[d.repeat];
+  $('repeatBtn').setAttribute('aria-label', REPEAT_LABELS[d.repeat]);
   $('prevAyah').disabled = d.current <= d.from;
   $('nextAyah').disabled = d.current >= d.to;
 
@@ -317,6 +326,12 @@ $('togglePlay').onclick = () => player.toggle();
 $('nextAyah').onclick = () => player.next();
 $('prevAyah').onclick = () => player.prev();
 $('stopPlay').onclick = () => player.stop();
+try { if (REPEAT_MODES.includes(localStorage.getItem('quran-reader:repeat'))) player.repeat = localStorage.getItem('quran-reader:repeat'); } catch {}
+$('repeatBtn').onclick = () => {
+  const mode = player.cycleRepeat();
+  try { localStorage.setItem('quran-reader:repeat', mode); } catch {}
+  toast({ off: 'أُوقف التكرار', range: 'تكرار المقطع: ستُعاد الآيات من البداية بعد انتهائها', ayah: 'تكرار الآية: ستُعاد الآية الحالية' }[mode]);
+};
 
 // ---------- Navigation & file input ----------
 $('prevPage').onclick = () => goTo(state.page - 1);

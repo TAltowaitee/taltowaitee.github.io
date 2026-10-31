@@ -25,6 +25,9 @@ export async function ayahText(surah, ayah) {
   return textCache.get(key);
 }
 
+// Repeat modes, in the order the repeat button cycles through them
+export const REPEAT_MODES = ['off', 'range', 'ayah'];
+
 export class VersePlayer extends EventTarget {
   constructor() {
     super();
@@ -34,7 +37,8 @@ export class VersePlayer extends EventTarget {
     this.preloader.preload = 'auto';
     this.reciter = RECITERS[0].id;
     this.queue = null; // { surah, from, to, current }
-    this.audio.addEventListener('ended', () => this.#advance(1));
+    this.repeat = 'off'; // 'off' | 'range' (loop the whole range) | 'ayah' (loop the current ayah)
+    this.audio.addEventListener('ended', () => this.#onEnded());
     this.audio.addEventListener('play', () => this.#emit());
     this.audio.addEventListener('pause', () => this.#emit());
     this.audio.addEventListener('error', () => {
@@ -62,12 +66,34 @@ export class VersePlayer extends EventTarget {
     this.#emit();
   }
 
+  /** Cycle off -> range -> ayah -> off. Returns the new mode. */
+  cycleRepeat() {
+    this.repeat = REPEAT_MODES[(REPEAT_MODES.indexOf(this.repeat) + 1) % REPEAT_MODES.length];
+    if (this.queue) this.#preloadNext();
+    this.#emit();
+    return this.repeat;
+  }
+
   next() { this.#advance(1); }
   prev() { this.#advance(-1); }
 
   setReciter(id) {
     this.reciter = id;
     if (this.queue) this.#load(); // restart current ayah with the new voice
+  }
+
+  #onEnded() {
+    const q = this.queue;
+    if (!q) return;
+    if (this.repeat === 'ayah') {
+      this.audio.currentTime = 0;              // same ayah again
+      this.audio.play().catch(() => {});
+    } else if (this.repeat === 'range' && q.current >= q.to) {
+      q.current = q.from;                      // back to the start of the range
+      this.#load();
+    } else {
+      this.#advance(1);
+    }
   }
 
   #advance(step) {
@@ -85,10 +111,19 @@ export class VersePlayer extends EventTarget {
     this.audio.src = audioUrl(this.reciter, surah, current);
     this.audio.play().catch(() => {}); // play() rejects if interrupted - harmless
     this.#emit();
-    if (current < this.queue.to) this.preloader.src = audioUrl(this.reciter, surah, current + 1);
+    this.#preloadNext();
+  }
+
+  /** Quietly download whatever will play after the current ayah. */
+  #preloadNext() {
+    const { surah, current, from, to } = this.queue;
+    const upcoming = this.repeat === 'ayah' ? null
+      : current < to ? current + 1
+      : this.repeat === 'range' ? from : null;
+    if (upcoming) this.preloader.src = audioUrl(this.reciter, surah, upcoming);
   }
 
   #emit(extra = {}) {
-    this.dispatchEvent(new CustomEvent('change', { detail: { ...this.queue, playing: this.playing, ...extra } }));
+    this.dispatchEvent(new CustomEvent('change', { detail: { ...this.queue, playing: this.playing, repeat: this.repeat, ...extra } }));
   }
 }

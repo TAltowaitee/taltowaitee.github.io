@@ -212,12 +212,22 @@ button, input, select { font: inherit; color: inherit; }
   max-height: 4.4em; overflow-y: auto;
 }
 .now-text.error { font-family: var(--ui); font-size: .9rem; color: var(--danger); line-height: 1.5; }
-.controls { direction: ltr; /* media controls keep LTR order in RTL UIs */ display: flex; align-items: center; gap: .35rem; flex: none; }
+.controls { display: flex; align-items: center; gap: .35rem; flex: none; }
 .icon-btn {
   width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line);
   background: var(--surface); display: grid; place-items: center; cursor: pointer;
 }
 .icon-btn svg { width: 18px; height: 18px; fill: currentColor; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.icon-btn { position: relative; }
+.icon-btn:disabled { opacity: .4; cursor: default; }
+.icon-btn svg.line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.icon-btn.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.rep-badge {
+  position: absolute; top: -4px; inset-inline-start: -4px;
+  min-width: 18px; height: 18px; border-radius: 9px; padding: 0 4px;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: .7rem; font-weight: 700; line-height: 18px; text-align: center;
+}
 .icon-btn.big { width: 50px; height: 50px; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .icon-btn.big svg { width: 22px; height: 22px; stroke: none; }
 
@@ -246,11 +256,13 @@ body.focus .topbar, body.focus .panel, body.focus .focus-btn { display: none; }
 body.focus .viewer {
   position: fixed; inset: 0; z-index: 10;
   background: #1b1e1c;
-  display: flex; align-items: center; justify-content: center;
-  touch-action: pinch-zoom; user-select: none; -webkit-user-select: none;
+  display: flex; overflow-y: auto; overscroll-behavior: contain;
+  touch-action: pan-y pinch-zoom; user-select: none; -webkit-user-select: none;
   cursor: pointer;
 }
-body.focus .page-frame { width: auto; max-width: none; border-radius: 0; box-shadow: none; }
+/* Landscape pages scroll; reserve the scrollbar's space so the page width doesn't jump */
+@media (orientation: landscape) { body.focus .viewer { scrollbar-gutter: stable; } }
+body.focus .page-frame { width: auto; max-width: none; margin: auto; flex: none; border-radius: 0; box-shadow: none; }
 
 .focus-bar {
   position: fixed; top: 0; inset-inline: 0; z-index: 12;

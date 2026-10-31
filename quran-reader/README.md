@@ -16,7 +16,9 @@ Open an Arabic PDF book, read it page by page, and play any Quran verse cited on
 | `books/<fingerprint>.json` | Hand-checked verse list for a specific book (loads automatically when that PDF is opened) |
 | `vendor/` | pdf.js 4.10.38 (Apache-2.0), bundled so there's no CDN dependency |
 
-**Focus mode** (⛶ on the page, or `F`): the page fills the screen; tap it to show/hide the verse chips, player and page controls; swipe to turn pages; `Esc` or ✕ to exit.
+**Focus mode** (⛶ on the page, or `F`): the page fills the screen; tap it to show/hide the verse chips, player and page controls; swipe to turn pages; `Esc` or ✕ to exit. Portrait shows the whole page; landscape fills the width and scrolls.
+
+**Repeat** (player): one button cycles off → repeat the range → repeat the current ayah; the choice is remembered.
 
 A page's verses come from, in order: **the user's edits** → **a hand-checked book list** → **auto-detection**.
 Auto-detected verses the app isn't sure about are flagged «تحقّق» and can be fixed with ✎.
