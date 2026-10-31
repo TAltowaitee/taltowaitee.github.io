@@ -12,6 +12,7 @@ Open an Arabic PDF book, read it page by page, and play any Quran verse cited on
 | `js/detect.js` | Finds citations like `[فصلت: ٤١-٤٢]` in the PDF text, even when the text layer is damaged |
 | `js/player.js` | Plays ayah ranges one by one from everyayah.com; fetches the ayah text from alquran.cloud |
 | `js/surahs.js` | The 114 surah names and ayah counts |
+| `books/dalil-ila-alquran.pdf` | Built-in book «الدليل إلى القرآن», opened from the welcome screen |
 | `books/<fingerprint>.json` | Hand-checked verse list for a specific book (loads automatically when that PDF is opened) |
 | `vendor/` | pdf.js 4.10.38 (Apache-2.0), bundled so there's no CDN dependency |
 

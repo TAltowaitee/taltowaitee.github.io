@@ -299,6 +299,17 @@ $('pageInput').onchange = () => goTo(+$('pageInput').value);
 
 $('openBtn').onclick = () => $('fileInput').click();
 $('dropZone').onclick = () => $('fileInput').click();
+// The built-in book shipped with the site
+$('sampleBook').onclick = async () => {
+  toast('جارٍ تحميل الكتاب…');
+  try {
+    const res = await fetch('books/dalil-ila-alquran.pdf');
+    if (!res.ok) throw new Error(res.status);
+    openPdf(new File([await res.blob()], 'الدليل إلى القرآن.pdf', { type: 'application/pdf' }));
+  } catch {
+    toast('تعذّر تحميل الكتاب. تحقّق من اتصالك بالإنترنت.');
+  }
+};
 $('fileInput').onchange = () => { openPdf($('fileInput').files[0]); $('fileInput').value = ''; };
 
 addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('dragging'); });
