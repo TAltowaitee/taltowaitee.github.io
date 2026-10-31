@@ -158,5 +158,27 @@ export function itemsToLines(items) {
     row.items.push(it);
   }
   rows.sort((a, b) => b.y - a.y); // top of page first
-  return rows.map((r) => r.items.sort((a, b) => a.transform[4] - b.transform[4]).map((i) => i.str).join(''));
+  const lines = [];
+  let prevLogical = null;
+  for (const r of rows) {
+    r.items.sort((a, b) => a.transform[4] - b.transform[4]);
+    // 1) Visual order, left to right - how some PDFs (e.g. the bundled book) store text
+    const visual = r.items.map((i) => i.str).join('');
+    lines.push(visual);
+    // 2) Reading order: right to left, with mirrored brackets flipped back.
+    //    Most PDFs (Word, InDesign, browsers) store each glyph in drawing order, so a citation
+    //    [القدر: ١] arrives as "[1 ر:دقلا]" unless we rebuild the reading order.
+    const arabic = (visual.match(/[؀-ۿﭐ-﷿ﹰ-﻿]/g) || []).length;
+    const latin = (visual.match(/[A-Za-z]/g) || []).length;
+    const logical = arabic >= latin
+      ? [...r.items].reverse().map((i) => i.str).join('').replace(/[[\](){}﴾﴿]/g, (c) => MIRROR[c])
+      : null;
+    if (logical && arabic) lines.push(logical);
+    // 3) A citation cut by a line break: "[سورة البقرة:" at the end of one line, "255]" on the next
+    if (prevLogical && logical && /\[[^\]]*$/.test(prevLogical)) lines.push(`${prevLogical} ${logical}`);
+    prevLogical = logical;
+  }
+  return lines;
 }
+
+const MIRROR = { '[': ']', ']': '[', '(': ')', ')': '(', '{': '}', '}': '{', '﴾': '﴿', '﴿': '﴾' };

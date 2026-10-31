@@ -35,3 +35,20 @@ test('hadith references in parentheses are ignored', () => {
 test('normalization strips harakat and tatweel', () => {
   assert.equal(normalizeArabic('القِيَامَـة'), 'القيامه');
 });
+
+// A normal text-based PDF (made by a browser), where each letter is stored in drawing order.
+// Regression test: detection used to find nothing in PDFs like this.
+test('clean text PDF: finds every citation, skips the hadith reference', async () => {
+  const fs = await import('node:fs');
+  const pdfjs = await import('../vendor/pdf.mjs');
+  const { itemsToLines } = await import('../js/detect.js');
+  const data = new Uint8Array(fs.readFileSync(new URL('./fixtures/clean-sample.pdf', import.meta.url)));
+  const doc = await pdfjs.getDocument({ data, verbosity: 0 }).promise;
+  const found = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const { items } = await (await doc.getPage(p)).getTextContent();
+    const keys = new Set(findCitations(itemsToLines(items)).filter((v) => v.confident).map((v) => `p${p} ${v.surah}:${v.from}-${v.to}`));
+    found.push(...keys);
+  }
+  assert.deepEqual(found, ['p2 97:1-1', 'p2 2:185-185', 'p2 41:41-42', 'p4 2:255-255', 'p4 112:1-1', 'p4 36:1-2', 'p5 73:4-4']);
+});

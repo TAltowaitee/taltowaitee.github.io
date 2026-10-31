@@ -14,7 +14,7 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
+    <div class="brand" id="brand">
       <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 5c-3-2-7-2.5-11-1.5v22c4-1 8-.5 11 1.5 3-2 7-2.5 11-1.5v-22C23 2.5 19 3 16 5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M16 5v22" stroke="currentColor" stroke-width="2"/><path d="M20.5 12.5v6l4-3z" fill="currentColor"/></svg>
       <div>
         <h1>قارئ الآيات</h1>
@@ -22,6 +22,9 @@
       </div>
     </div>
     <div class="tools">
+      <button id="homeBtn" class="btn home-btn" type="button" hidden aria-label="العودة إلى المكتبة">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7M6 9.5V20h4.5v-5h3v5H18V9.5"/></svg><span>المكتبة</span>
+      </button>
       <label class="reciter">
         <span>القارئ</span>
         <select id="reciter"></select>
@@ -38,9 +41,9 @@
       <span class="book-info">
         <strong>الدليل إلى القرآن</strong>
         <span>عمرو صبحي الشرقاوي</span>
-        <span class="book-meta">٢٦ صفحة · ٣٥ موضعًا لآيات مُراجَعة</span>
+        <span class="book-meta" id="sampleMeta">٢٦ صفحة · ٣٥ موضعًا لآيات مُراجَعة</span>
       </span>
-      <span class="btn primary">ابدأ القراءة</span>
+      <span class="btn primary" id="sampleCta">ابدأ القراءة</span>
     </button>
     <p class="or">أو افتح كتابًا من جهازك</p>
     <button id="dropZone" class="drop-zone" type="button">
@@ -71,8 +74,22 @@
         <h2 id="panelTitle">آيات هذه الصفحة</h2>
         <span id="sourceBadge" class="badge"></span>
       </div>
+      <!-- Whole-book scan progress (automatic detection) -->
+      <div id="scanStatus" class="scan" hidden>
+        <div id="scanText" class="scan-text"></div>
+        <div class="scan-bar" role="progressbar" aria-label="تقدّم البحث عن الآيات"><div id="scanBar"></div></div>
+      </div>
+      <p id="noTextMsg" class="notice" hidden>
+        <b>هذا الكتاب صور ممسوحة ضوئيًا بلا نص قابل للقراءة</b>، لذا لا يمكن اكتشاف آياته تلقائيًا.
+        يمكنك إضافة الآيات يدويًا بزر «إضافة آية» في كل صفحة، وتُحفظ إضافاتك.
+      </p>
+      <div id="pageLoading" class="page-loading" hidden><span class="spin" aria-hidden="true"></span>جارٍ البحث عن الآيات في هذه الصفحة…</div>
       <ul id="verseList" class="verse-list"></ul>
       <p id="emptyMsg" class="empty" hidden>لا توجد آيات مُكتشفة في هذه الصفحة.</p>
+      <div class="jump-row">
+        <button id="jumpPrev" class="link" type="button" disabled>→ صفحة آيات سابقة</button>
+        <button id="jumpNext" class="link" type="button" disabled>صفحة آيات تالية ←</button>
+      </div>
       <div class="panel-actions">
         <button id="addVerseBtn" class="btn ghost" type="button">＋ إضافة آية</button>
         <button id="resetPageBtn" class="link" type="button" hidden>التراجع عن تعديلاتي في هذه الصفحة</button>

@@ -15,6 +15,17 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdf.worker.mjs', imp
 
 const $ = (id) => document.getElementById(id);
 const ar = (n) => Number(n).toLocaleString('ar-EG', { useGrouping: false });
+/** Arabic counted nouns change form with the number: موضع واحد، موضعان، ٣ مواضع، ١١ موضعًا، ١٠٠ موضع */
+function countAr(n, { one, two, few, many, hundred }) {
+  const r = n % 100;
+  if (n === 1) return one;
+  if (n === 2) return two;
+  if (r >= 3 && r <= 10) return `${ar(n)} ${few}`;
+  if (r >= 11) return `${ar(n)} ${many}`;
+  return `${ar(n)} ${hundred}`; // 100, 101, 102, 200…
+}
+const PLACES = { one: 'موضع واحد', two: 'موضعين', few: 'مواضع', many: 'موضعًا', hundred: 'موضع' };
+const PAGES = { one: 'صفحة واحدة', two: 'صفحتين', few: 'صفحات', many: 'صفحة', hundred: 'صفحة' };
 const range = (v) => (v.from === v.to ? `الآية ${ar(v.from)}` : `الآيات ${ar(v.from)}–${ar(v.to)}`);
 
 const ICONS = {
@@ -31,11 +42,15 @@ const state = {
   page: 1,
   curated: null,      // reviewed index for this book, if we have one
   overrides: {},      // page -> verse list edited by the user
-  autoCache: new Map(),
+  autoCache: new Map(), // page -> Promise of { list, chars } from automatic detection
+  autoDone: new Map(),  // page -> { list, chars } once detection has finished
+  scanId: 0,            // bumps when a new book opens, so an old background scan stops
+  openId: 0,            // bumps on every open/home, so a slow-loading book can't pop up later
   renderTask: null,
-  editing: null,
-  focus: false,       // full-screen reading mode      // { index } when editing an existing verse, {} when adding
+  editing: null,        // { index } when editing an existing verse, { index: null } when adding
+  focus: false,         // full-screen reading mode
 };
+const SAMPLE_FINGERPRINT = '7b358a0eaf470e459c010810e0b57b99'; // the built-in book
 const player = new VersePlayer();
 
 // ---------- Persistence (this browser only) ----------
@@ -53,14 +68,18 @@ function loadSaved() {
 async function openPdf(file) {
   if (!file || !/pdf$/i.test(file.type || file.name)) return toast('الرجاء اختيار ملف بصيغة PDF.');
   toast('جارٍ فتح الكتاب…');
+  const openId = ++state.openId;
   try {
     const data = new Uint8Array(await file.arrayBuffer());
     const doc = await pdfjsLib.getDocument({ data, verbosity: 0 }).promise;
+    if (openId !== state.openId) return doc.destroy(); // user went home (or opened another book) meanwhile
     if (state.doc) state.doc.destroy();
     player.stop();
-    Object.assign(state, { doc, fingerprint: doc.fingerprints[0], curated: null, autoCache: new Map() });
+    state.scanId++; // stop any scan of the previous book
+    Object.assign(state, { doc, fingerprint: doc.fingerprints[0], curated: null, autoCache: new Map(), autoDone: new Map() });
 
     state.curated = await fetch(`books/${state.fingerprint}.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (openId !== state.openId) return;
     const saved = loadSaved();
     state.overrides = saved.overrides || {};
 
@@ -75,10 +94,17 @@ async function openPdf(file) {
     $('welcome').hidden = true;
     $('reader').hidden = false;
     $('dock').hidden = false;
+    $('homeBtn').hidden = false;
+    $('brand').classList.add('clickable');
+    $('noTextMsg').hidden = true;
+    $('scanStatus').hidden = true;
+    // Let the phone's back gesture / browser Back button return to the library
+    if (!history.state?.reader) history.pushState({ reader: true }, '');
     $('pageCount').textContent = ar(doc.numPages);
     $('pageInput').max = doc.numPages;
     hideToast();
     await goTo(saved.page || 1);
+    if (!state.curated) scanBook(); // no hand-checked list: search the whole book in the background
   } catch (err) {
     console.error(err);
     toast('تعذّر فتح هذا الملف. تأكد أنه ملف PDF سليم.');
@@ -101,8 +127,8 @@ async function goTo(n) {
 }
 
 async function renderPage(n) {
-  const page = await state.doc.getPage(n);
-  if (n !== state.page) return; // user already moved on
+  const page = await state.doc?.getPage(n).catch(() => null); // the book may have just been closed
+  if (!page || n !== state.page) return; // closed, or the reader already moved on
   state.renderTask?.cancel();
 
   const canvas = $('pageCanvas');
@@ -147,18 +173,89 @@ async function versesFor(n) {
     const list = (state.curated.pages[n] || []).map(([surah, from, to]) => ({ surah, from, to, confident: true }));
     return { list, source: 'book' };
   }
+  const { list } = await detectPage(n);
+  return { list, source: 'auto' };
+}
+
+/** Automatic detection for one page. Cached as a promise, so the page the reader is on and the
+ *  background scan never do the same work twice. */
+function detectPage(n) {
   if (!state.autoCache.has(n)) {
-    const page = await state.doc.getPage(n);
-    const { items } = await page.getTextContent();
-    const found = findCitations(itemsToLines(items));
-    // The same citation can appear twice on a page; keep one of each
-    const seen = new Set();
-    state.autoCache.set(n, found.filter((v) => {
-      const k = `${v.surah}:${v.from}:${v.to}`;
-      return !seen.has(k) && seen.add(k);
-    }));
+    const doc = state.doc;
+    state.autoCache.set(n, (async () => {
+      const { items } = await (await doc.getPage(n)).getTextContent();
+      const chars = items.reduce((sum, i) => sum + i.str.trim().length, 0);
+      // The same citation is often found twice (in both text orders); keep one of each
+      const seen = new Set();
+      const list = findCitations(itemsToLines(items)).filter((v) => {
+        const k = `${v.surah}:${v.from}:${v.to}`;
+        return !seen.has(k) && seen.add(k);
+      });
+      const result = { list, chars };
+      if (doc === state.doc) state.autoDone.set(n, result);
+      return result;
+    })().catch(() => ({ list: [], chars: 0 })));
   }
-  return { list: state.autoCache.get(n), source: 'auto' };
+  return state.autoCache.get(n);
+}
+
+/** True while automatic detection is still working on page n. */
+const isPending = (n) => !state.overrides[n] && !state.curated && !state.autoDone.has(n);
+
+/** Does page n have verses (as far as we know yet)? Used by the "jump" buttons. */
+function hasVerses(n) {
+  if (state.overrides[n]) return state.overrides[n].length > 0;
+  if (state.curated) return (state.curated.pages[n] || []).length > 0;
+  return (state.autoDone.get(n)?.list.length || 0) > 0;
+}
+function findVersePage(from, step) {
+  for (let p = from + step; p >= 1 && p <= state.doc.numPages; p += step) if (hasVerses(p)) return p;
+  return null;
+}
+function updateJumpButtons() {
+  if (!state.doc) return;
+  $('jumpPrev').disabled = !findVersePage(state.page, -1);
+  $('jumpNext').disabled = !findVersePage(state.page, 1);
+}
+$('jumpPrev').onclick = () => { const p = findVersePage(state.page, -1); if (p) goTo(p); };
+$('jumpNext').onclick = () => { const p = findVersePage(state.page, 1); if (p) goTo(p); };
+
+/** Search every page in the background, showing progress, then summarize. */
+async function scanBook() {
+  const id = state.scanId;
+  const total = state.doc.numPages;
+  let done = 0, verses = 0, pages = 0, chars = 0;
+  const status = $('scanStatus');
+  status.hidden = false;
+  status.classList.remove('done');
+  const show = () => {
+    $('scanText').innerHTML = `جارٍ البحث عن الآيات في الكتاب… <b>${ar(done)} من ${ar(total)}</b> صفحة`;
+    $('scanBar').style.width = `${(done / total) * 100}%`;
+  };
+  show();
+  for (let p = 1; p <= total; p++) {
+    const { list, chars: c } = await detectPage(p);
+    if (id !== state.scanId) return; // another book was opened, or we went home
+    done++;
+    chars += c;
+    if (list.length) { pages++; verses += list.length; }
+    if (p === state.page) renderVerseList();
+    if (done % 5 === 0 || done === total) { show(); updateJumpButtons(); }
+    if (p % 10 === 0) await new Promise((r) => setTimeout(r)); // keep the page responsive
+  }
+  status.classList.add('done');
+  const scanned = chars / total < 15; // almost no text at all: the pages are images
+  if (scanned) {
+    status.hidden = true;
+    $('noTextMsg').hidden = false;
+    renderVerseList();
+    return;
+  }
+  $('scanText').innerHTML = verses
+    ? `عُثر على <b>${countAr(verses, PLACES)} لآيات</b> في ${countAr(pages, PAGES)}. تحقّق من المواضع المعلَّمة بـ⚠.`
+    : 'لم يُعثر على مواضع آيات بصيغة [السورة: الآية] في هذا الكتاب. يمكنك إضافتها يدويًا.';
+  toast(verses ? `اكتمل البحث: ${countAr(verses, PLACES)} في ${countAr(pages, PAGES)}` : 'اكتمل البحث: لم يُعثر على آيات');
+  updateJumpButtons();
 }
 
 const BADGES = {
@@ -170,14 +267,25 @@ const BADGES = {
 async function renderVerseList() {
   if (!state.doc) return; // nothing open yet
   const n = state.page;
+  updateJumpButtons();
+  if (isPending(n)) {
+    // Show a loading state right away instead of an empty (misleading) list
+    $('pageLoading').hidden = false;
+    $('emptyMsg').hidden = true;
+    $('verseList').replaceChildren();
+    $('focusVerses').innerHTML = '<span class="chip-loading"><span class="spin"></span>جارٍ البحث عن الآيات…</span>';
+    $('sourceBadge').textContent = BADGES.auto[0];
+    $('sourceBadge').className = 'badge auto';
+  }
   const { list, source } = await versesFor(n);
-  if (n !== state.page) return;
+  if (n !== state.page || !state.doc) return;
+  $('pageLoading').hidden = true;
 
   const [label, cls] = BADGES[source];
   $('sourceBadge').textContent = label;
   $('sourceBadge').className = `badge ${cls}`;
   $('resetPageBtn').hidden = source !== 'user';
-  $('emptyMsg').hidden = list.length > 0;
+  $('emptyMsg').hidden = list.length > 0 || !$('noTextMsg').hidden;
 
   const q = player.queue;
   const isActive = (v) => q && q.surah === v.surah && q.from === v.from && q.to === v.to;
@@ -332,6 +440,42 @@ $('repeatBtn').onclick = () => {
   try { localStorage.setItem('quran-reader:repeat', mode); } catch {}
   toast({ off: 'أُوقف التكرار', range: 'تكرار المقطع: ستُعاد الآيات من البداية بعد انتهائها', ayah: 'تكرار الآية: ستُعاد الآية الحالية' }[mode]);
 };
+
+// ---------- Home (library) ----------
+function goHome() {
+  state.openId++; // cancel any book still loading
+  if (!state.doc) return;
+  exitFocus();
+  player.stop();
+  state.scanId++; // stop the background scan
+  state.doc.destroy();
+  state.doc = null;
+  state.renderTask?.cancel();
+  $('reader').hidden = true;
+  $('dock').hidden = true;
+  $('homeBtn').hidden = true;
+  $('welcome').hidden = false;
+  $('brand').classList.remove('clickable');
+  $('bookTitle').textContent = 'اقرأ كتابك واستمع إلى آياته';
+  document.title = 'قارئ الآيات';
+  updateLibraryCard();
+  scrollTo(0, 0);
+}
+// Home goes "back" in history, so the browser Back button and the home button behave the same
+const requestHome = () => (history.state?.reader ? history.back() : goHome());
+$('homeBtn').onclick = requestHome;
+$('brand').onclick = () => state.doc && requestHome();
+addEventListener('popstate', () => { if (state.doc && !history.state?.reader) goHome(); });
+if (history.state?.reader) history.replaceState(null, ''); // a reload starts at the library
+
+/** "Continue reading" on the built-in book's card. */
+function updateLibraryCard() {
+  let page = 0;
+  try { page = JSON.parse(localStorage.getItem(`quran-reader:${SAMPLE_FINGERPRINT}`))?.page || 0; } catch {}
+  $('sampleMeta').textContent = page > 1 ? `تابع القراءة من صفحة ${ar(page)} من ٢٦` : '٢٦ صفحة · ٣٥ موضعًا لآيات مُراجَعة';
+  $('sampleCta').textContent = page > 1 ? 'متابعة القراءة' : 'ابدأ القراءة';
+}
+updateLibraryCard();
 
 // ---------- Navigation & file input ----------
 $('prevPage').onclick = () => goTo(state.page - 1);

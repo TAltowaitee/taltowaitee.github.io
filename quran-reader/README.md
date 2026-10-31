@@ -32,7 +32,7 @@ Auto-detected verses the app isn't sure about are flagged «تحقّق» and can
 ## Tests
 
 ```bash
-node --test tests/                       # detector unit tests
+node --test tests/*.test.mjs            # detector unit tests (incl. a real text PDF)
 node tests/eval-pdf.mjs path/to/book.pdf # score detection on a real PDF against tests/groundtruth.mjs
 ```
 
