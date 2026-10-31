@@ -231,6 +231,65 @@ button, input, select { font: inherit; color: inherit; }
   border: 1px solid var(--line); background: var(--surface-2);
 }
 
+/* ---------- Focus (full-screen) mode ---------- */
+.focus-btn {
+  position: absolute; top: 10px; inset-inline-end: 10px;
+  width: 40px; height: 40px; border-radius: 10px; border: 0; cursor: pointer;
+  background: rgb(20 30 25 / .55); color: #fff; display: grid; place-items: center;
+  opacity: .7; transition: opacity .15s;
+}
+.focus-btn:hover, .focus-btn:focus-visible { opacity: 1; }
+.focus-btn svg, .focus-bar svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+body.focus { overflow: hidden; }
+body.focus .topbar, body.focus .panel, body.focus .focus-btn { display: none; }
+body.focus .viewer {
+  position: fixed; inset: 0; z-index: 10;
+  background: #1b1e1c;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: pinch-zoom; user-select: none; -webkit-user-select: none;
+  cursor: pointer;
+}
+body.focus .page-frame { width: auto; max-width: none; border-radius: 0; box-shadow: none; }
+
+.focus-bar {
+  position: fixed; top: 0; inset-inline: 0; z-index: 12;
+  display: flex; align-items: center; gap: .75rem;
+  padding: .55rem 1rem; padding-top: max(.55rem, env(safe-area-inset-top));
+  background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  transform: translateY(-100%); transition: transform .25s ease;
+}
+.focus-title { flex: 1; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.focus-page { color: var(--muted); font-size: .9rem; white-space: nowrap; }
+body.focus .dock {
+  position: fixed; bottom: 0; inset-inline: 0; z-index: 12;
+  padding-bottom: env(safe-area-inset-bottom);
+  transform: translateY(105%); transition: transform .25s ease;
+}
+body.focus.show-controls .focus-bar, body.focus.show-controls .dock { transform: none; }
+
+.focus-verses { display: none; }
+body.focus .focus-verses {
+  display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none;
+  padding: .6rem 1rem; border-bottom: 1px solid var(--line);
+}
+.chip {
+  flex: none; display: flex; align-items: center; gap: .45rem;
+  padding: .3rem .4rem; padding-inline-end: .85rem;
+  border-radius: 99px; border: 1px solid var(--line); background: var(--surface-2);
+  cursor: pointer; white-space: nowrap; font-weight: 500;
+}
+.chip .dot { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+.chip .dot svg { width: 13px; height: 13px; fill: currentColor; }
+.chip.active { border-color: var(--accent); background: var(--accent-soft); }
+.chip.unsure { border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
+.focus-verses .none { color: var(--muted); font-size: .85rem; padding: .3rem 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-bar, body.focus .dock { transition: none; }
+}
+
 /* ---------- Dialog & toast ---------- */
 .dialog {
   border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem;
@@ -252,6 +311,7 @@ button, input, select { font: inherit; color: inherit; }
   position: fixed; inset-inline: 0; top: 84px; margin: 0 auto; width: fit-content; max-width: calc(100vw - 32px);
   background: var(--ink); color: var(--bg); padding: .6rem 1rem; border-radius: 10px; z-index: 20;
   font-size: .9rem; box-shadow: var(--shadow);
+  pointer-events: none; /* never block taps on the page underneath */
 }
 
 /* ---------- Phones ---------- */

@@ -61,6 +61,7 @@
     <section class="viewer" aria-label="صفحة الكتاب">
       <div class="page-frame">
         <canvas id="pageCanvas"></canvas>
+        <button id="focusBtn" class="focus-btn" type="button" aria-label="ملء الشاشة" title="ملء الشاشة (F)"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button>
         <div id="pageSpinner" class="spinner" hidden></div>
       </div>
     </section>
@@ -80,7 +81,15 @@
     </aside>
   </main>
 
+  <!-- Focus mode: top bar, shown when the reader taps the page -->
+  <div id="focusBar" class="focus-bar" hidden>
+    <button id="exitFocus" class="icon-btn" type="button" aria-label="الخروج من ملء الشاشة" title="خروج (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <span id="focusTitle" class="focus-title"></span>
+    <span id="focusPage" class="focus-page"></span>
+  </div>
+
   <footer id="dock" class="dock" hidden>
+    <div id="focusVerses" class="focus-verses" aria-label="آيات هذه الصفحة"></div>
     <div id="player" class="player" hidden>
       <div class="now">
         <div id="nowTitle" class="now-title"></div>

@@ -33,7 +33,8 @@ const state = {
   overrides: {},      // page -> verse list edited by the user
   autoCache: new Map(),
   renderTask: null,
-  editing: null,      // { index } when editing an existing verse, {} when adding
+  editing: null,
+  focus: false,       // full-screen reading mode      // { index } when editing an existing verse, {} when adding
 };
 const player = new VersePlayer();
 
@@ -66,6 +67,7 @@ async function openPdf(file) {
     const meta = await doc.getMetadata().catch(() => ({}));
     const title = state.curated?.title || meta.info?.Title || file.name.replace(/\.pdf$/i, '');
     $('bookTitle').textContent = state.curated?.author ? `${title} — ${state.curated.author}` : title;
+    $('focusTitle').textContent = title;
     document.title = `${title} · قارئ الآيات`;
     $('bookNote').textContent = state.curated?.note || '';
     $('bookNote').hidden = !state.curated?.note;
@@ -91,6 +93,7 @@ async function goTo(n) {
   $('pageInput').value = n;
   $('prevPage').disabled = n <= 1;
   $('nextPage').disabled = n >= state.doc.numPages;
+  $('focusPage').textContent = `صفحة ${ar(n)} من ${ar(state.doc.numPages)}`;
   save();
   renderVerseList(); // instant if cached; otherwise detection fills it in shortly
   await renderPage(n);
@@ -102,8 +105,16 @@ async function renderPage(n) {
   state.renderTask?.cancel();
 
   const canvas = $('pageCanvas');
-  const cssWidth = canvas.parentElement.clientWidth || 700;
   const base = page.getViewport({ scale: 1 });
+  let cssWidth;
+  if (state.focus) {
+    // Fit the whole page on screen: limited by width or by height, whichever is tighter
+    cssWidth = Math.min(innerWidth, innerHeight * (base.width / base.height));
+    canvas.style.width = `${cssWidth}px`;
+  } else {
+    canvas.style.width = '';
+    cssWidth = canvas.parentElement.clientWidth || 700;
+  }
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
   const viewport = page.getViewport({ scale: (cssWidth / base.width) * dpr });
 
@@ -165,6 +176,21 @@ async function renderVerseList() {
   $('emptyMsg').hidden = list.length > 0;
 
   const q = player.queue;
+  const isActive = (v) => q && q.surah === v.surah && q.from === v.from && q.to === v.to;
+  const playOrToggle = (v) => (isActive(v) ? player.toggle() : player.play(v.surah, v.from, v.to));
+
+  // Compact chips shown in focus mode
+  const chips = list.map((v) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `chip${v.confident === false ? ' unsure' : ''}${isActive(v) ? ' active' : ''}`;
+    b.innerHTML = `<span class="dot">${isActive(v) && player.playing ? ICONS.pause : ICONS.play}</span>${surahName(v.surah)} ${v.from === v.to ? ar(v.from) : `${ar(v.from)}–${ar(v.to)}`}`;
+    b.onclick = () => playOrToggle(v);
+    return b;
+  });
+  if (!chips.length) chips.push(Object.assign(document.createElement('span'), { className: 'none', textContent: 'لا آيات في هذه الصفحة' }));
+  $('focusVerses').replaceChildren(...chips);
+
   $('verseList').replaceChildren(...list.map((v, i) => {
     const li = document.createElement('li');
     const active = q && q.surah === v.surah && q.from === v.from && q.to === v.to;
@@ -322,6 +348,8 @@ addEventListener('drop', (e) => {
 
 addEventListener('keydown', (e) => {
   if (!state.doc || e.target.closest('input, select, textarea, dialog')) return;
+  if (e.key === 'f' || e.key === 'F' || e.key === 'ب') return state.focus ? exitFocus() : enterFocus(); // ب is F on Arabic keyboards
+  if (e.key === 'Escape') return exitFocus();
   // Arabic books turn pages leftwards: ← is the next page
   if (e.key === 'ArrowLeft') goTo(state.page + 1);
   else if (e.key === 'ArrowRight') goTo(state.page - 1);
@@ -333,6 +361,60 @@ addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => state.doc && renderPage(state.page), 200);
 });
+
+// ---------- Focus (full-screen) mode ----------
+// The page fills the screen. Tap the page to show/hide the controls; swipe to turn pages.
+let hintShown = false;
+
+function enterFocus() {
+  if (!state.doc || state.focus) return;
+  state.focus = true;
+  document.body.classList.add('focus');
+  document.body.classList.remove('show-controls');
+  $('focusBar').hidden = false;
+  // Real fullscreen where the browser allows it (not on iPhone - the CSS mode still works there)
+  document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
+  renderPage(state.page);
+  if (!hintShown) { hintShown = true; toast('اضغط على الصفحة لإظهار أدوات التحكم، واسحب يمينًا أو يسارًا لتقليب الصفحات.'); }
+}
+
+function exitFocus() {
+  if (!state.focus) return;
+  state.focus = false;
+  document.body.classList.remove('focus', 'show-controls');
+  $('focusBar').hidden = true;
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  renderPage(state.page);
+}
+
+const toggleControls = () => document.body.classList.toggle('show-controls');
+
+$('focusBtn').onclick = (e) => { e.stopPropagation(); enterFocus(); };
+$('exitFocus').onclick = exitFocus;
+// Leaving browser fullscreen (e.g. the Esc key or a system gesture) also leaves focus mode
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) exitFocus(); });
+
+// Tap vs swipe on the page, using pointer events so it works with mouse, touch and pen
+const viewer = document.querySelector('.viewer');
+let gesture = null;
+viewer.addEventListener('pointerdown', (e) => {
+  if (!state.focus) return;
+  if (e.isPrimary) gesture = { x: e.clientX, y: e.clientY, t: Date.now() };
+  else if (gesture) gesture.multi = true; // a second finger = pinch-zoom, not a tap or swipe
+});
+viewer.addEventListener('pointerup', (e) => {
+  const g = gesture;
+  gesture = null;
+  if (!state.focus || !g || g.multi) return;
+  const dx = e.clientX - g.x, dy = e.clientY - g.y;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+    // Arabic books: dragging the page to the right brings the next page
+    goTo(state.page + (dx > 0 ? 1 : -1));
+  } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && Date.now() - g.t < 500) {
+    toggleControls();
+  }
+});
+viewer.addEventListener('pointercancel', () => { gesture = null; });
 
 // ---------- Toast ----------
 let toastTimer;
