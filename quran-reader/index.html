@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>قارئ الآيات</title>
+  <meta name="description" content="اقرأ كتبك العربية بصيغة PDF صفحة صفحة، واستمع إلى الآيات القرآنية الواردة فيها بصوت الشيخ الحصري.">
+  <meta name="theme-color" content="#0f5c45">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 5c-3-2-7-2.5-11-1.5v22c4-1 8-.5 11 1.5 3-2 7-2.5 11-1.5v-22C23 2.5 19 3 16 5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M16 5v22" stroke="currentColor" stroke-width="2"/><path d="M20.5 12.5v6l4-3z" fill="currentColor"/></svg>
+      <div>
+        <h1>قارئ الآيات</h1>
+        <p id="bookTitle" class="book-title">اقرأ كتابك واستمع إلى آياته</p>
+      </div>
+    </div>
+    <div class="tools">
+      <label class="reciter">
+        <span>القارئ</span>
+        <select id="reciter"></select>
+      </label>
+      <button id="openBtn" class="btn primary" type="button">فتح كتاب</button>
+      <input id="fileInput" type="file" accept="application/pdf,.pdf" hidden>
+    </div>
+  </header>
+
+  <!-- Shown before a book is opened -->
+  <main id="welcome" class="welcome">
+    <button id="dropZone" class="drop-zone" type="button">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 6h14l10 10v24a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M28 6v10h10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 22v12m-5-5 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <strong>اسحب ملف PDF إلى هنا أو اضغط لاختياره</strong>
+      <span>يُفتح الملف على جهازك فقط، ولا يُرفع إلى أي خادم.</span>
+    </button>
+    <ol class="how">
+      <li><b>افتح كتابًا عربيًا</b> بصيغة PDF.</li>
+      <li><b>تصفّح صفحة صفحة</b>، ويظهر بجانب كل صفحة ما فيها من آيات.</li>
+      <li><b>اضغط ▶</b> لتستمع إلى الآية بصوت الشيخ محمود خليل الحصري.</li>
+      <li><b>صحّح أو أضف</b> أي آية فاتَ التطبيقَ اكتشافُها، وتُحفظ تعديلاتك تلقائيًا.</li>
+    </ol>
+  </main>
+
+  <!-- Shown after a book is opened -->
+  <main id="reader" class="reader" hidden>
+    <section class="viewer" aria-label="صفحة الكتاب">
+      <div class="page-frame">
+        <canvas id="pageCanvas"></canvas>
+        <div id="pageSpinner" class="spinner" hidden></div>
+      </div>
+    </section>
+
+    <aside class="panel" aria-labelledby="panelTitle">
+      <div class="panel-head">
+        <h2 id="panelTitle">آيات هذه الصفحة</h2>
+        <span id="sourceBadge" class="badge"></span>
+      </div>
+      <ul id="verseList" class="verse-list"></ul>
+      <p id="emptyMsg" class="empty" hidden>لا توجد آيات مُكتشفة في هذه الصفحة.</p>
+      <div class="panel-actions">
+        <button id="addVerseBtn" class="btn ghost" type="button">＋ إضافة آية</button>
+        <button id="resetPageBtn" class="link" type="button" hidden>التراجع عن تعديلاتي في هذه الصفحة</button>
+      </div>
+      <p id="bookNote" class="note" hidden></p>
+    </aside>
+  </main>
+
+  <footer id="dock" class="dock" hidden>
+    <div id="player" class="player" hidden>
+      <div class="now">
+        <div id="nowTitle" class="now-title"></div>
+        <div id="nowText" class="now-text"></div>
+      </div>
+      <div class="controls">
+        <button id="prevAyah" class="icon-btn" type="button" aria-label="الآية السابقة"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 5l-9 7 9 7z"/></svg></button>
+        <button id="togglePlay" class="icon-btn big" type="button" aria-label="تشغيل/إيقاف مؤقت"></button>
+        <button id="nextAyah" class="icon-btn" type="button" aria-label="الآية التالية"><svg viewBox="0 0 24 24"><path d="M18 5v14M6 5l9 7-9 7z"/></svg></button>
+        <button id="stopPlay" class="icon-btn" type="button" aria-label="إيقاف"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
+      </div>
+    </div>
+    <nav class="pager" aria-label="التنقل بين الصفحات">
+      <button id="prevPage" class="btn" type="button">→ السابقة</button>
+      <label class="page-num">صفحة <input id="pageInput" type="number" min="1" inputmode="numeric"> من <span id="pageCount"></span></label>
+      <button id="nextPage" class="btn" type="button">التالية ←</button>
+    </nav>
+  </footer>
+
+  <dialog id="verseDialog" class="dialog">
+    <form id="verseForm" method="dialog" novalidate>
+      <h3 id="dialogTitle">إضافة آية</h3>
+      <label>السورة
+        <select id="fSurah" required></select>
+      </label>
+      <div class="row">
+        <label>من الآية <input id="fFrom" type="number" min="1" required inputmode="numeric"></label>
+        <label>إلى الآية <input id="fTo" type="number" min="1" required inputmode="numeric"></label>
+      </div>
+      <p id="fError" class="error" hidden></p>
+      <div class="dialog-actions">
+        <button class="btn primary" value="save" type="submit">حفظ</button>
+        <button class="btn" value="cancel" type="button" id="cancelDialog">إلغاء</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
