@@ -184,20 +184,29 @@ function detectPage(n) {
     const doc = state.doc;
     state.autoCache.set(n, (async () => {
       const { items } = await (await doc.getPage(n)).getTextContent();
-      const chars = items.reduce((sum, i) => sum + i.str.trim().length, 0);
+      // Count characters, and how many are real text. Some PDFs embed fonts without telling
+      // which letter each shape is; their "text" is junk codes, as useless as a scan.
+      let chars = 0, readable = 0;
+      for (const it of items) for (const c of it.str) {
+        if (c === '\u0000' || /\s/.test(c)) continue;
+        chars++;
+        if (READABLE.test(c)) readable++;
+      }
       // The same citation is often found twice (in both text orders); keep one of each
       const seen = new Set();
       const list = findCitations(itemsToLines(items)).filter((v) => {
         const k = `${v.surah}:${v.from}:${v.to}`;
         return !seen.has(k) && seen.add(k);
       });
-      const result = { list, chars };
+      const result = { list, chars, readable };
       if (doc === state.doc) state.autoDone.set(n, result);
       return result;
-    })().catch(() => ({ list: [], chars: 0 })));
+    })().catch(() => ({ list: [], chars: 0, readable: 0 })));
   }
   return state.autoCache.get(n);
 }
+
+const READABLE = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFFA-Za-z0-9.,:;!?()[\]{}«»"'\-–—/﴿﴾،؛؟]/;
 
 /** True while automatic detection is still working on page n. */
 const isPending = (n) => !state.overrides[n] && !state.curated && !state.autoDone.has(n);
@@ -220,11 +229,18 @@ function updateJumpButtons() {
 $('jumpPrev').onclick = () => { const p = findVersePage(state.page, -1); if (p) goTo(p); };
 $('jumpNext').onclick = () => { const p = findVersePage(state.page, 1); if (p) goTo(p); };
 
+function showUnreadable() {
+  state.scanId++; // stop scanning
+  $('scanStatus').hidden = true;
+  $('noTextMsg').hidden = false;
+  renderVerseList();
+}
+
 /** Search every page in the background, showing progress, then summarize. */
 async function scanBook() {
   const id = state.scanId;
   const total = state.doc.numPages;
-  let done = 0, verses = 0, pages = 0, chars = 0;
+  let done = 0, verses = 0, pages = 0, chars = 0, readable = 0;
   const status = $('scanStatus');
   status.hidden = false;
   status.classList.remove('done');
@@ -234,23 +250,21 @@ async function scanBook() {
   };
   show();
   for (let p = 1; p <= total; p++) {
-    const { list, chars: c } = await detectPage(p);
+    const { list, chars: c, readable: r } = await detectPage(p);
     if (id !== state.scanId) return; // another book was opened, or we went home
     done++;
     chars += c;
+    readable += r;
+    // Junk text is obvious after a few pages - no need to scan the whole book to find nothing
+    if (done >= Math.min(5, total) && chars >= 200 && readable / chars < 0.5) return showUnreadable();
     if (list.length) { pages++; verses += list.length; }
     if (p === state.page) renderVerseList();
     if (done % 5 === 0 || done === total) { show(); updateJumpButtons(); }
     if (p % 10 === 0) await new Promise((r) => setTimeout(r)); // keep the page responsive
   }
   status.classList.add('done');
-  const scanned = chars / total < 15; // almost no text at all: the pages are images
-  if (scanned) {
-    status.hidden = true;
-    $('noTextMsg').hidden = false;
-    renderVerseList();
-    return;
-  }
+  // Almost no text (pages are images), or mostly junk codes: detection can't work
+  if (chars / total < 15 || readable / chars < 0.5) return showUnreadable();
   $('scanText').innerHTML = verses
     ? `عُثر على <b>${countAr(verses, PLACES)} لآيات</b> في ${countAr(pages, PAGES)}. تحقّق من المواضع المعلَّمة بـ⚠.`
     : 'لم يُعثر على مواضع آيات بصيغة [السورة: الآية] في هذا الكتاب. يمكنك إضافتها يدويًا.';
