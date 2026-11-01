@@ -10,6 +10,7 @@ import * as pdfjsLib from '../vendor/pdf.mjs';
 import { findCitations, itemsToLines } from './detect.js';
 import { SURAHS, surahName, ayahCount } from './surahs.js';
 import { VersePlayer, RECITERS, REPEAT_MODES, ayahText } from './player.js';
+import { LIBRARY } from './library.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdf.worker.mjs', import.meta.url).href;
 
@@ -50,7 +51,6 @@ const state = {
   editing: null,        // { index } when editing an existing verse, { index: null } when adding
   focus: false,         // full-screen reading mode
 };
-const SAMPLE_FINGERPRINT = '7b358a0eaf470e459c010810e0b57b99'; // the built-in book
 const player = new VersePlayer();
 
 // ---------- Persistence (this browser only) ----------
@@ -65,7 +65,7 @@ function loadSaved() {
 }
 
 // ---------- Opening a book ----------
-async function openPdf(file) {
+async function openPdf(file, { bookId = null } = {}) {
   if (!file || !/pdf$/i.test(file.type || file.name)) return toast('الرجاء اختيار ملف بصيغة PDF.');
   toast('جارٍ فتح الكتاب…');
   const openId = ++state.openId;
@@ -99,7 +99,10 @@ async function openPdf(file) {
     $('noTextMsg').hidden = true;
     $('scanStatus').hidden = true;
     // Let the phone's back gesture / browser Back button return to the library
-    if (!history.state?.reader) history.pushState({ reader: true }, '');
+    // The URL remembers which library book is open (#book=dalil-2), so a reload reopens it
+    const url = bookId ? `#book=${bookId}` : location.pathname + location.search;
+    if (history.state?.reader) history.replaceState({ reader: true }, '', url);
+    else history.pushState({ reader: true }, '', url);
     $('pageCount').textContent = ar(doc.numPages);
     $('pageInput').max = doc.numPages;
     hideToast();
@@ -480,16 +483,53 @@ const requestHome = () => (history.state?.reader ? history.back() : goHome());
 $('homeBtn').onclick = requestHome;
 $('brand').onclick = () => state.doc && requestHome();
 addEventListener('popstate', () => { if (state.doc && !history.state?.reader) goHome(); });
-if (history.state?.reader) history.replaceState(null, ''); // a reload starts at the library
-
-/** "Continue reading" on the built-in book's card. */
+/** Draw the library cards, with "continue from page N" where the reader left off. */
 function updateLibraryCard() {
-  let page = 0;
-  try { page = JSON.parse(localStorage.getItem(`quran-reader:${SAMPLE_FINGERPRINT}`))?.page || 0; } catch {}
-  $('sampleMeta').textContent = page > 1 ? `تابع القراءة من صفحة ${ar(page)} من ٢٦` : '٢٦ صفحة · ٣٥ موضعًا لآيات مُراجَعة';
-  $('sampleCta').textContent = page > 1 ? 'متابعة القراءة' : 'ابدأ القراءة';
+  $('library').replaceChildren(...LIBRARY.map((book) => {
+    let page = 0;
+    try { page = JSON.parse(localStorage.getItem(`quran-reader:${book.fingerprint}`))?.page || 0; } catch {}
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'book-card';
+    card.dataset.book = book.id;
+    card.innerHTML = `
+      <span class="book-cover" aria-hidden="true">${book.title.split(' ').join('<br>')}<small>${book.part}</small></span>
+      <span class="book-info">
+        <strong>${book.title} <small>(${book.part})</small></strong>
+        <span>${book.author}</span>
+        <span class="book-meta">${page > 1
+          ? `تابع القراءة من صفحة ${ar(page)} من ${ar(book.pages)}`
+          : `${ar(book.pages)} صفحة · ${countAr(book.verses, PLACES)} لآيات مُراجَعة`}</span>
+      </span>
+      <span class="btn primary">${page > 1 ? 'متابعة القراءة' : 'ابدأ القراءة'}</span>`;
+    card.onclick = () => openLibraryBook(book.id);
+    return card;
+  }));
 }
+
+/** Download a built-in book from the site and open it. */
+async function openLibraryBook(id) {
+  const book = LIBRARY.find((b) => b.id === id);
+  if (!book) return;
+  toast('جارٍ تحميل الكتاب…');
+  try {
+    const res = await fetch(book.file);
+    if (!res.ok) throw new Error(res.status);
+    await openPdf(new File([await res.blob()], `${book.title}.pdf`, { type: 'application/pdf' }), { bookId: id });
+  } catch {
+    toast('تعذّر تحميل الكتاب. تحقّق من اتصالك بالإنترنت.');
+  }
+}
+
 updateLibraryCard();
+// Reload while reading a library book: reopen it (its page is remembered per book).
+// Start from a clean history entry so Back still returns to the library.
+{
+  const id = new URLSearchParams(location.hash.slice(1)).get('book');
+  history.replaceState(null, '', location.pathname + location.search);
+  // setTimeout: wait until this whole file has run, so everything openLibraryBook uses exists
+  if (LIBRARY.some((b) => b.id === id)) setTimeout(() => openLibraryBook(id));
+}
 
 // ---------- Navigation & file input ----------
 $('prevPage').onclick = () => goTo(state.page - 1);
@@ -498,17 +538,6 @@ $('pageInput').onchange = () => goTo(+$('pageInput').value);
 
 $('openBtn').onclick = () => $('fileInput').click();
 $('dropZone').onclick = () => $('fileInput').click();
-// The built-in book shipped with the site
-$('sampleBook').onclick = async () => {
-  toast('جارٍ تحميل الكتاب…');
-  try {
-    const res = await fetch('books/dalil-ila-alquran.pdf');
-    if (!res.ok) throw new Error(res.status);
-    openPdf(new File([await res.blob()], 'الدليل إلى القرآن.pdf', { type: 'application/pdf' }));
-  } catch {
-    toast('تعذّر تحميل الكتاب. تحقّق من اتصالك بالإنترنت.');
-  }
-};
 $('fileInput').onchange = () => { openPdf($('fileInput').files[0]); $('fileInput').value = ''; };
 
 addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('dragging'); });

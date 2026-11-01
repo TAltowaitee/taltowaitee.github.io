@@ -12,7 +12,8 @@ Open an Arabic PDF book, read it page by page, and play any Quran verse cited on
 | `js/detect.js` | Finds citations like `[فصلت: ٤١-٤٢]` in the PDF text, even when the text layer is damaged |
 | `js/player.js` | Plays ayah ranges one by one from everyayah.com; fetches the ayah text from alquran.cloud |
 | `js/surahs.js` | The 114 surah names and ayah counts |
-| `books/dalil-ila-alquran.pdf` | Built-in book «الدليل إلى القرآن», opened from the welcome screen |
+| `js/library.js` | The built-in books on the home screen (hard-coded for now; a database will replace it) |
+| `books/*.pdf` | Built-in book files: «الدليل إلى القرآن» parts 1 (p. 11–34) and 2 (p. 35–57) |
 | `books/<fingerprint>.json` | Hand-checked verse list for a specific book (loads automatically when that PDF is opened) |
 | `vendor/` | pdf.js 4.10.38 (Apache-2.0), bundled so there's no CDN dependency |
 
@@ -22,6 +23,15 @@ Open an Arabic PDF book, read it page by page, and play any Quran verse cited on
 
 A page's verses come from, in order: **the user's edits** → **a hand-checked book list** → **auto-detection**.
 Auto-detected verses the app isn't sure about are flagged «تحقّق» and can be fixed with ✎.
+
+Reloading while reading a built-in book reopens it on the same page (the URL holds `#book=<id>`;
+the page is remembered per book in localStorage). Books opened from the device can't be reopened
+after a reload yet: the browser doesn't keep the file.
+
+## Adding a built-in book
+
+1. Put the PDF in `books/`, add an entry to `js/library.js`.
+2. Add its hand-checked verse list as `books/<fingerprint>.json` (see below).
 
 ## Adding a hand-checked list for another book
 
