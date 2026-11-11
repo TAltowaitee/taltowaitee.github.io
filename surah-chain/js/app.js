@@ -107,22 +107,28 @@ function fillCustomSelects() {
 }
 
 /* ---------- Practice ---------- */
-function openRange(range, { push = true } = {}) {
+/** Navigate to a section; the hash change opens it (so Back returns home). */
+function go(range) {
+  const h = `#r-${rangeKey(range)}`;
+  if (location.hash === h) openRange(range);
+  else location.hash = h;
+}
+
+function openRange(range) {
   const k = rangeKey(range);
   prog = store.ranges[k] ||= createProgress(range);
   store.current = k;
   save();
   screen = null;
   streak = 0;
-  if (push && location.hash !== `#r=${k}`) history.pushState(null, '', `#r=${k}`);
   show('practice');
   next();
 }
 
-function goHome({ push = true } = {}) {
+function goHome() {
+  if (location.hash.length > 1) { location.hash = ''; return; } // route() comes back here
   clearTimeout(timer);
   prog = null;
-  if (push && location.hash) history.pushState(null, '', location.pathname + location.search);
   renderHome();
   show('home');
 }
@@ -479,7 +485,7 @@ document.addEventListener('keydown', (e) => {
 
 $('ranges').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-range]');
-  if (btn) openRange(btn.dataset.range.split('-').map(Number));
+  if (btn) go(btn.dataset.range.split('-').map(Number));
 });
 
 $('customForm').addEventListener('submit', (e) => {
@@ -488,7 +494,7 @@ $('customForm').addEventListener('submit', (e) => {
   let b = +$('customTo').value;
   if (a > b) [a, b] = [b, a];
   if (a === b) { b = Math.min(114, a + 1); if (a === b) a--; }
-  openRange([a, b]);
+  go([a, b]);
 });
 
 $('brand').addEventListener('click', () => goHome());
@@ -506,12 +512,24 @@ for (const [id, k] of Object.entries(toggles)) {
     if (k === 'numbers' && prog && task && !screen) renderTask();
   });
 }
+// Reset asks for a second tap instead of a confirm() dialog.
+const RESET_LABEL = $('resetBtn').textContent;
 $('resetBtn').addEventListener('click', () => {
-  if (!prog || !confirm(`إعادة «${rangeTitle(prog.range)}» إلى البداية؟ سيُمحى تقدّمك في هذا المقطع.`)) return;
+  const btn = $('resetBtn');
+  if (!prog) return;
+  if (!btn.classList.contains('armed')) {
+    btn.classList.add('armed');
+    btn.textContent = `اضغط مرة أخرى لمحو تقدّمك في «${rangeTitle(prog.range)}»`;
+    return;
+  }
   const range = prog.range;
   delete store.ranges[rangeKey(range)];
   $('settingsDialog').close();
-  openRange(range, { push: false });
+  openRange(range);
+});
+$('settingsDialog').addEventListener('close', () => {
+  $('resetBtn').classList.remove('armed');
+  $('resetBtn').textContent = RESET_LABEL;
 });
 
 // Close dialogs by tapping the backdrop
@@ -520,12 +538,12 @@ for (const d of document.querySelectorAll('dialog')) {
 }
 
 function route() {
-  const m = location.hash.match(/^#r=(\d+)-(\d+)$/);
+  const m = location.hash.match(/^#r-(\d+)-(\d+)$/);
   const r = m && [+m[1], +m[2]];
-  if (r && r[0] >= 1 && r[1] <= 114 && r[1] > r[0]) openRange(r, { push: false });
-  else goHome({ push: false });
+  if (r && r[0] >= 1 && r[1] <= 114 && r[1] > r[0]) openRange(r);
+  else goHome();
 }
-window.addEventListener('popstate', route);
+window.addEventListener('hashchange', route);
 
 fillCustomSelects();
 route();
