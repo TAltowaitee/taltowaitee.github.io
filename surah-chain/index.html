@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>سلسلة السور</title>
+  <meta name="description" content="احفظ ترتيب سور القرآن الكريم بالتسلسل: أزواج متتالية، ثم ثلاثيات، ثم سلاسل أطول، مع اختبار إتقان قبل كل مستوى.">
+  <meta name="theme-color" content="#0f5c45">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <button class="brand" id="brand" type="button" aria-label="الصفحة الرئيسية">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="3" y="11" width="10" height="10" rx="5" fill="none" stroke="currentColor" stroke-width="2.4"/>
+        <rect x="11" y="11" width="10" height="10" rx="5" fill="none" stroke="currentColor" stroke-width="2.4"/>
+        <rect x="19" y="11" width="10" height="10" rx="5" fill="none" stroke="currentColor" stroke-width="2.4"/>
+      </svg>
+      <span>
+        <strong>سلسلة السور</strong>
+        <small id="subtitle">احفظ ترتيب سور القرآن بالتسلسل</small>
+      </span>
+    </button>
+    <div class="tools">
+      <button id="mapBtn" class="icon-btn" type="button" hidden aria-label="خريطة الإتقان" title="خريطة الإتقان">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      </button>
+      <button id="settingsBtn" class="icon-btn" type="button" aria-label="الإعدادات" title="الإعدادات">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Home: how it works + choose a section -->
+  <main id="home" class="home">
+    <section class="intro">
+      <h1>اعرف ما قبل كل سورة وما بعدها، تعرفْ ترتيب المصحف كله</h1>
+      <ol class="steps">
+        <li><b>أزواج متتالية</b><span>الفاتحة ← البقرة، ثم البقرة ← آل عمران، ثم آل عمران ← النساء…</span></li>
+        <li><b>تُخفى سورة</b><span>واختر الصحيحة من بين سور متجاورة يسهل الخلط بينها.</span></li>
+        <li><b>تطول السلسلة</b><span>إذا أتقنت كل الأزواج ونجحت في اختبار المستوى، انتقلت إلى ٣ سور، ثم ٤… حتى ٧.</span></li>
+      </ol>
+    </section>
+
+    <section aria-labelledby="sectionsTitle">
+      <div class="section-head">
+        <h2 id="sectionsTitle">اختر مقطعًا</h2>
+        <p>المقاطع متداخلة بسورة واحدة لتبقى السلسلة متصلة.</p>
+      </div>
+      <div id="ranges" class="ranges"></div>
+
+      <form id="customForm" class="custom">
+        <strong>مقطع مخصّص</strong>
+        <label>من <select id="customFrom"></select></label>
+        <label>إلى <select id="customTo"></select></label>
+        <button class="btn primary" type="submit">ابدأ</button>
+      </form>
+    </section>
+  </main>
+
+  <!-- Practice -->
+  <main id="practice" class="practice" hidden>
+    <section class="status" aria-label="التقدّم">
+      <div class="status-row">
+        <span id="levelBadge" class="badge"></span>
+        <span id="modeBadge" class="badge soft" hidden></span>
+        <span class="spacer"></span>
+        <span class="stat"><small>الدقة</small><b id="accuracy">—</b></span>
+        <span class="stat"><small>متتالية</small><b id="streak">٠</b></span>
+      </div>
+      <div class="bar" role="progressbar" id="levelBar" aria-valuemin="0" aria-valuemax="100"><span></span></div>
+      <p id="levelText" class="bar-text"></p>
+    </section>
+
+    <section id="card" class="card" aria-live="polite"></section>
+    <p class="keys" aria-hidden="true">لوحة المفاتيح: <kbd>1</kbd>–<kbd>6</kbd> للاختيار، <kbd>Enter</kbd> للتالي</p>
+  </main>
+
+  <!-- Mastery map -->
+  <dialog id="mapDialog" class="sheet">
+    <form method="dialog" class="sheet-head">
+      <h2>خريطة الإتقان</h2>
+      <button class="icon-btn" aria-label="إغلاق">✕</button>
+    </form>
+    <p id="mapCaption" class="muted"></p>
+    <div id="map" class="map"></div>
+    <div class="legend"><span>بداية</span><i></i><span>إتقان تام</span></div>
+  </dialog>
+
+  <!-- Settings -->
+  <dialog id="settingsDialog" class="sheet">
+    <form method="dialog" class="sheet-head">
+      <h2>الإعدادات</h2>
+      <button class="icon-btn" aria-label="إغلاق">✕</button>
+    </form>
+    <label class="toggle"><input type="checkbox" id="optPreviews"><span><b>بطاقات التعريف</b><small>اعرض كل زوج جديد قبل السؤال عنه</small></span></label>
+    <label class="toggle"><input type="checkbox" id="optNumbers"><span><b>أرقام السور</b><small>اعرض رقم السورة بجانب اسمها</small></span></label>
+    <label class="toggle"><input type="checkbox" id="optVibrate"><span><b>الاهتزاز عند الخطأ</b><small>على الهواتف التي تدعمه</small></span></label>
+    <div id="resetWrap" class="reset" hidden>
+      <p class="muted">إعادة المقطع الحالي إلى البداية تمحو تقدّمك فيه فقط.</p>
+      <button id="resetBtn" class="btn danger" type="button">إعادة هذا المقطع من البداية</button>
+    </div>
+  </dialog>
+</body>
+</html>
